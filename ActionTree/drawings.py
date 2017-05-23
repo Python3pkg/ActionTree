@@ -72,7 +72,7 @@ class ExecutionReport(object):
     def __init__(self, action):
         actions = freeze(action, self.Annotations)
         self.root_action = actions[id(action)]
-        self.actions = self.__sort_actions(actions.values())
+        self.actions = self.__sort_actions(list(actions.values()))
         self.begin_time = min(a.begin_time for a in self.actions)
         self.end_time = max(a.end_time for a in self.actions)
         self.duration = self.end_time - self.begin_time
@@ -157,7 +157,7 @@ class ExecutionReport(object):
         ax2 = ax.twiny()
         ax2.set_xlabel("Relative time")
         ax2.set_xlim(min_time, max_time)
-        ticks = range(0, duration, nearest(duration // 5, intervals))
+        ticks = list(range(0, duration, nearest(duration // 5, intervals)))
         ax2.xaxis.set_ticks([self.begin_time + datetime.timedelta(seconds=s) for s in ticks])
         ax2.xaxis.set_ticklabels(ticks)
 
@@ -172,7 +172,7 @@ class DependencyGraph(object):
 
     def __init__(self, action):
         self.__next_node = -1
-        self.__actions = self._sorted(freeze(action, self.__annotate).values())
+        self.__actions = self._sorted(list(freeze(action, self.__annotate).values()))
 
     def __annotate(self):
         self.__next_node += 1

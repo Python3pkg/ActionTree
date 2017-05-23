@@ -102,7 +102,7 @@ class ExecutionReportTestCase(TestCaseWithMocks):
         )
 
     def test_plot_on_mpl_axes(self):
-        dt = functools.partial(datetime.datetime, 2015, 05, 14, 18, 40)
+        dt = functools.partial(datetime.datetime, 2015, 0o5, 14, 18, 40)
         ab, ae = dt(3, 750), dt(4, 750)
         bb, be = dt(1, 500), dt(2, 500)
         cb, ce = dt(1, 250), dt(3, 250)
