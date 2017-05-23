@@ -1,23 +1,28 @@
+sudo: required
 language: python
+
 python:
-- 2.7
-- 3.3
-- 3.4
-sudo: false
+  - "2.7"
+  - "3.6"
+  - "3.7-dev" # 3.7 development branch
+
 addons:
   apt:
     packages:
     - graphviz
 install:
-- pip install sphinx coveralls
-- pip install graphviz matplotlib
+  - pip install sphinx coveralls
+  - pip install graphviz matplotlib
+  
 script:
-- coverage run "--include=ActionTree/*" setup.py test
-- if [ "v$TRAVIS_PYTHON_VERSION" == "v2.7" ];
-    then python setup.py build_sphinx --builder=doctest;
-  fi
+  - "python setup.py install"
+  - coverage run "--include=ActionTree/*" setup.py test  
+  - if [ "v$TRAVIS_PYTHON_VERSION" == "v2.7" ];
+      then python setup.py build_sphinx --builder=doctest;
+    fi
 after_success:
 - coveralls
+
 deploy:
   provider: pypi
   user: jacquev6
@@ -26,4 +31,4 @@ deploy:
   on:
     tags: true
     repo: jacquev6/ActionTree
-    python: 2.7
+    python: 3.6
