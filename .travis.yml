@@ -6,7 +6,7 @@ python:
   - "nightly" # currently points to 3.7-dev
 
 dist: trusty
-sudo: required
+sudo: false
 language: python
 
 
@@ -17,6 +17,7 @@ before_install:
   - pwd
   - free -tm
   - python --version
+
 addons:
   apt:
     packages:
@@ -27,6 +28,7 @@ install:
     then
       pip install --upgrade mock;
     fi
+
 script:
 - export COVERAGE_FILE=/tmp/.coverage
 - '(echo "[run]"; echo "branch = True"; echo "include = $(pwd)/ActionTree/*"; echo "concurrency = multiprocessing"; echo "[report]"; echo "exclude_lines ="; echo "  Not unittested: ...") > /tmp/.coveragerc'
@@ -49,3 +51,24 @@ notifications:
       - ralic.lo.eng@ieee.org
     on_success: always # default: change
     on_failure: never # default: always
+
+deploy:
+- provider: pypi
+  user: jacquev6
+  password:
+    secure: d3UoCrv3O53EeMhnhcfplSzc6R3aQqWES7d6gMwfeHlVib+k0GWKCMJqwKhrgMiqWxzW/DhK2t0fckwHgId2Fr6NyUZnIIto8X2wbQtbIIxV033y1DsVJgmEi2UjyJ5E7uI8+cnFLa8p7YgPXNt0cKajxHXSfBJY492nlQL1YRc=
+  skip_upload_docs: true
+  on:
+    tags: true
+    repo: jacquev6/ActionTree
+    python: 2.7
+- provider: pypi
+  server: https://testpypi.python.org/pypi
+  user: jacquev6
+  password:
+    secure: d3UoCrv3O53EeMhnhcfplSzc6R3aQqWES7d6gMwfeHlVib+k0GWKCMJqwKhrgMiqWxzW/DhK2t0fckwHgId2Fr6NyUZnIIto8X2wbQtbIIxV033y1DsVJgmEi2UjyJ5E7uI8+cnFLa8p7YgPXNt0cKajxHXSfBJY492nlQL1YRc=
+  skip_upload_docs: true
+  on:
+    tags: false
+    repo: jacquev6/ActionTree
+    python: 2.7
