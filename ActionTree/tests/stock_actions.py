@@ -1,141 +1,262 @@
 # coding: utf8
 
-# Copyright 2013-2015 Vincent Jacques <vincent@vincent-jacques.net>
+# Copyright 2013-2017 Vincent Jacques <vincent@vincent-jacques.net>
 
-import datetime
+from __future__ import division, absolute_import, print_function
+
 import errno
+import pickle
+import subprocess
 import unittest
 
 from ActionTree.stock import *
-from ActionTree import CompoundException
-from . import TestCaseWithMocks
+from ActionTree import *
 
 
-class CreateDirectoryTestCase(TestCaseWithMocks):
+class PatchingTestCase(unittest.TestCase):
+    def patch(self, *args, **kwds):
+        patcher = unittest.mock.patch(*args, **kwds)
+        patched = patcher.start()
+        self.addCleanup(patcher.stop)
+        return patched
+
+
+class CreateDirectoryTestCase(PatchingTestCase):
     def setUp(self):
-        TestCaseWithMocks.setUp(self)
-        self.makedirs = self.mocks.replace("os.makedirs")
-        self.isdir = self.mocks.replace("os.path.isdir")
+        self.makedirs = self.patch("os.makedirs")
+        self.isdir = self.patch("os.path.isdir")
 
     def test_label(self):
         self.assertEqual(CreateDirectory("xxx").label, "mkdir xxx")
 
+        self.makedirs.assert_not_called()
+        self.isdir.assert_not_called()
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(CreateDirectory("xxx")), bytes)
+
     def test_success(self):
         self.makedirs.expect("xxx")
 
-        CreateDirectory("xxx").execute()
+        CreateDirectory("xxx").do_execute({})
+
+        self.makedirs.assert_called_once_with("xxx")
+        self.isdir.assert_not_called()
 
     def test_directory_exists(self):
-        self.makedirs.expect("xxx").andRaise(OSError(errno.EEXIST, "File exists"))
-        self.isdir.expect("xxx").andReturn(True)
+        self.makedirs.side_effect = OSError(errno.EEXIST, "File exists")
+        self.isdir.return_value = True
 
-        CreateDirectory("xxx").execute()
+        CreateDirectory("xxx").do_execute({})
+
+        self.makedirs.assert_called_once_with("xxx")
+        self.isdir.assert_called_once_with("xxx")
 
     def test_file_exists(self):
-        self.makedirs.expect("xxx").andRaise(OSError(errno.EEXIST, "File exists"))
-        self.isdir.expect("xxx").andReturn(False)
+        self.makedirs.side_effect = OSError(errno.EEXIST, "File exists")
+        self.isdir.return_value = False
 
-        with self.assertRaises(CompoundException):
-            CreateDirectory("xxx").execute()
+        with self.assertRaises(OSError):
+            CreateDirectory("xxx").do_execute({})
+
+        self.makedirs.assert_called_once_with("xxx")
+        self.isdir.assert_called_once_with("xxx")
 
     def test_other_failure(self):
-        self.makedirs.expect("xxx").andRaise(OSError(-1, "Foobar"))
+        self.makedirs.side_effect = OSError(-1, "Foobar")
 
-        with self.assertRaises(CompoundException):
-            CreateDirectory("xxx").execute()
+        with self.assertRaises(OSError):
+            CreateDirectory("xxx").do_execute({})
+
+        self.makedirs.assert_called_once_with("xxx")
+        self.isdir.assert_not_called()
 
 
-class CallSubprocessTestCase(TestCaseWithMocks):
+class CallSubprocessTestCase(PatchingTestCase):
     def setUp(self):
-        TestCaseWithMocks.setUp(self)
-        self.check_call = self.mocks.replace("subprocess.check_call")
+        self.check_call = self.patch("subprocess.check_call")
 
-    def test_label(self):
+    def test_default_label(self):
         self.assertEqual(CallSubprocess(["xxx", "yyy"]).label, "xxx yyy")
 
+    def test_label(self):
+        self.assertEqual(CallSubprocess(["xxx", "yyy"], label="foo").label, "foo")
+
+    def test_accept_failed_dependencies(self):
+        self.assertTrue(CallSubprocess(["xxx", "yyy"], accept_failed_dependencies=True).accept_failed_dependencies)
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(CallSubprocess(["xxx", "yyy"])), bytes)
+
     def test_simple_call(self):
-        self.check_call.expect(["xxx"])
-        CallSubprocess(["xxx"]).execute()
+        CallSubprocess(["xxx"]).do_execute({})
+
+        self.check_call.assert_called_once_with(["xxx"])
 
     def test_call_with_several_args(self):
         self.check_call.expect(["xxx", "yyy"])
-        CallSubprocess(["xxx", "yyy"]).execute()
+        CallSubprocess(["xxx", "yyy"]).do_execute({})
+
+        self.check_call.assert_called_once_with(["xxx", "yyy"])
 
     def test_call_with_kwds(self):
-        self.check_call.expect(["xxx", "yyy"], foo="bar")
-        CallSubprocess(["xxx", "yyy"], foo="bar").execute()
+        CallSubprocess(["xxx", "yyy"], kwargs=dict(foo="bar")).do_execute({})
+
+        self.check_call.assert_called_once_with(["xxx", "yyy"], foo="bar")
+
+    def test_called_process_error(self):
+        self.check_call.side_effect = subprocess.CalledProcessError(1, ["false"], None)
+
+        with self.assertRaises(CalledProcessError) as catcher:
+            CallSubprocess(["false"]).do_execute({})
+        self.assertEqual(catcher.exception.args, (1, ["false"], None))
 
 
-class DeleteFileTestCase(TestCaseWithMocks):
+class CallSubprocessForRealTestCase(unittest.TestCase):
+    def test_called_process_error(self):
+        with self.assertRaises(CompoundException) as catcher:
+            execute(CallSubprocess(["false"]))
+        self.assertEqual(catcher.exception.exceptions[0].args, (1, ["false"], None))
+
+
+class DeleteFileTestCase(PatchingTestCase):
     def setUp(self):
-        TestCaseWithMocks.setUp(self)
-        self.unlink = self.mocks.replace("os.unlink")
+        self.unlink = self.patch("os.unlink")
 
     def test_label(self):
         self.assertEqual(DeleteFile("xxx").label, "rm xxx")
 
-    def test_success(self):
-        self.unlink.expect("xxx")
+        self.unlink.assert_not_called()
 
-        DeleteFile("xxx").execute()
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(DeleteFile("xxx")), bytes)
+
+    def test_success(self):
+        DeleteFile("xxx").do_execute({})
+
+        self.unlink.assert_called_once_with("xxx")
 
     def test_file_does_not_exist(self):
-        self.unlink.expect("xxx").andRaise(OSError(errno.ENOENT, "No such file or directory"))
+        self.unlink.side_effect = OSError(errno.ENOENT, "No such file or directory")
 
-        DeleteFile("xxx").execute()
+        DeleteFile("xxx").do_execute({})
+
+        self.unlink.assert_called_once_with("xxx")
 
     def test_other_failure(self):
-        self.unlink.expect("xxx").andRaise(OSError(-1, "Foobar"))
+        self.unlink.side_effect = OSError(-1, "Foobar")
 
-        with self.assertRaises(CompoundException):
-            DeleteFile("xxx").execute()
+        with self.assertRaises(OSError):
+            DeleteFile("xxx").do_execute({})
+
+        self.unlink.assert_called_once_with("xxx")
 
 
-class CopyFileTestCase(TestCaseWithMocks):
+class DeleteDirectoryTestCase(PatchingTestCase):
     def setUp(self):
-        TestCaseWithMocks.setUp(self)
-        self.copy = self.mocks.replace("shutil.copy")
+        self.rmtree = self.patch("shutil.rmtree")
+
+    def test_label(self):
+        self.assertEqual(DeleteDirectory("xxx").label, "rm -r xxx")
+
+        self.rmtree.assert_not_called()
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(DeleteDirectory("xxx")), bytes)
 
     def test_success(self):
-        self.copy.expect("from", "to")
+        DeleteDirectory("xxx").do_execute({})
 
-        CopyFile("from", "to").execute()
+        self.rmtree.assert_called_once_with("xxx")
 
-    def test_failure(self):
-        self.copy.expect("from", "to").andRaise(OSError(-1, "Foobar"))
+    def test_directory_does_not_exist(self):
+        self.rmtree.side_effect = OSError(errno.ENOENT, "No such file or directory")
 
-        with self.assertRaises(CompoundException):
-            CopyFile("from", "to").execute()
+        DeleteDirectory("xxx").do_execute({})
+
+        self.rmtree.assert_called_once_with("xxx")
+
+    def test_other_failure(self):
+        self.rmtree.side_effect = OSError(-1, "Foobar")
+
+        with self.assertRaises(OSError):
+            DeleteDirectory("xxx").do_execute({})
+
+        self.rmtree.assert_called_once_with("xxx")
+
+
+class CopyFileTestCase(PatchingTestCase):
+    def setUp(self):
+        self.copy = self.patch("shutil.copy")
 
     def test_label(self):
         self.assertEqual(CopyFile("from", "to").label, "cp from to")
 
+        self.copy.assert_not_called()
 
-class TouchFileTestCase(TestCaseWithMocks):
-    def setUp(self):
-        TestCaseWithMocks.setUp(self)
-        self.open = self.mocks.replace("TouchFile._open")
-        self.file = self.mocks.create("FileLikeObject")
-        self.utime = self.mocks.replace("os.utime")
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(CopyFile("from", "to")), bytes)
 
     def test_success(self):
-        self.open.expect("xxx", "ab").andReturn(self.file.object)
-        self.file.expect.close()
-        self.utime.expect("xxx", None)
+        CopyFile("from", "to").do_execute({})
 
-        TouchFile("xxx").execute()
+        self.copy.assert_called_once_with("from", "to")
+
+    def test_failure(self):
+        self.copy.side_effect = OSError(-1, "Foobar")
+
+        with self.assertRaises(OSError):
+            CopyFile("from", "to").do_execute({})
+
+        self.copy.assert_called_once_with("from", "to")
+
+
+class TouchFileTestCase(PatchingTestCase):
+    def setUp(self):
+        self.open = self.patch("ActionTree.stock.open", new=unittest.mock.mock_open(), create=True)
+        self.utime = self.patch("os.utime")
 
     def test_label(self):
         self.assertEqual(TouchFile("xxx").label, "touch xxx")
 
+        self.open.assert_not_called()
+        self.utime.assert_not_called()
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(TouchFile("xxx")), bytes)
+
+    def test_success(self):
+        TouchFile("xxx").do_execute({})
+
+        self.open.assert_called_once_with("xxx", "ab")
+        self.open().close.assert_called_once_with()
+        self.utime.assert_called_once_with("xxx", None)
+
 
 class NullActionTestCase(unittest.TestCase):
+    def test_label(self):
+        self.assertIsNone(NullAction().label)
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(NullAction()), bytes)
+
     def test(self):
-        NullAction().execute()
+        NullAction().do_execute({})
 
 
-class SleepTestCase(unittest.TestCase):
+class SleepTestCase(PatchingTestCase):
+    def setUp(self):
+        self.sleep = self.patch("time.sleep")
+
+    def test_label(self):
+        self.assertEqual(Sleep(1).label, "sleep 1")
+
+        self.sleep.assert_not_called()
+
+    def test_pickle(self):
+        self.assertIsInstance(pickle.dumps(Sleep(1)), bytes)
+
     def test(self):
-        before = datetime.datetime.now()
-        Sleep(1).execute()
-        self.assertGreater(datetime.datetime.now() - before, datetime.timedelta(seconds=1))
+        Sleep(1).do_execute({})
+
+        self.sleep.assert_called_once_with(1)

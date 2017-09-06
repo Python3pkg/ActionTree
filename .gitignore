@@ -1,11 +1,9 @@
 *.pyc
 /dist/
 /build/
-/MANIFEST
 /*.egg-info/
 /.coverage
-/doc/build/
+/.coverage.*
 /.eggs/
-/htmlcov/
-
-/execution_report_visual_test_case.png
+/action.png
+/report.png

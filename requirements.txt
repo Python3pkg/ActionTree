@@ -1,0 +1,7 @@
+pip 
+setuptools 
+coverage
+sphinx 
+coveralls
+graphviz 
+matplotlib

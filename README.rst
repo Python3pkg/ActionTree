@@ -1,11 +1,10 @@
-ActionTree is a Python (2.7+ and 3.3+) library to execute (long) actions in parallel, respecting dependencies between those actions.
-You create the graph of the actions to be executed and then call the ``execute`` method of its root,
-specifying how many actions must be run in parallel and if errors should stop the execution.
+*ActionTree* is a Python (2.7 and 3.5+) library to execute (long) actions in parallel, respecting dependencies between those actions.
+You create a dependency graph of actions to be executed and then call the ``execute`` function on its root.
 
 It's licensed under the `MIT license <http://choosealicense.com/licenses/mit/>`__.
 It's available on the `Python package index <http://pypi.python.org/pypi/ActionTree>`__,
-its `documentation is hosted by Python <http://pythonhosted.org/ActionTree>`__
-and its source code is on `GitHub <https://github.com/jacquev6/ActionTree>`__.
+its `documentation <http://jacquev6.github.io/ActionTree>`__
+and its `source code <https://github.com/jacquev6/ActionTree>`__ are on GitHub.
 
 Questions? Remarks? Bugs? Want to contribute? `Open an issue <https://github.com/jacquev6/ActionTree/issues>`__!
 
@@ -39,9 +38,6 @@ Questions? Remarks? Bugs? Want to contribute? `Open an issue <https://github.com
 .. image:: https://img.shields.io/github/issues/jacquev6/ActionTree.svg
     :target: https://github.com/jacquev6/ActionTree/issues
 
-.. image:: https://badge.waffle.io/jacquev6/ActionTree.png?label=ready&title=ready
-    :target: https://waffle.io/jacquev6/ActionTree
-
 .. image:: https://img.shields.io/github/forks/jacquev6/ActionTree.svg
     :target: https://github.com/jacquev6/ActionTree/network
 
@@ -57,12 +53,19 @@ Install from PyPI::
 
 Import:
 
->>> from ActionTree import *
->>> from ActionTree.stock import *
+>>> from ActionTree import execute
+>>> from ActionTree.stock import CallSubprocess
 
 Execute some action:
 
->>> link = CallSubprocess(["g++", "-o", "test", "a.o", "b.o"])
->>> link.add_dependency(CallSubprocess(["g++", "-c", "doc/a.cpp", "-o", "a.o"]))
->>> link.add_dependency(CallSubprocess(["g++", "-c", "doc/b.cpp", "-o", "b.o"]))
->>> link.execute(jobs=2)
+>>> link = CallSubprocess(["g++", "a.o", "b.o", "-o", "test"])
+>>> link.add_dependency(CallSubprocess(["g++", "-c", "a.cpp", "-o", "a.o"]))
+>>> link.add_dependency(CallSubprocess(["g++", "-c", "b.cpp", "-o", "b.o"]))
+>>> report = execute(link)
+
+And verify everything went well:
+
+>>> report.is_success
+True
+>>> os.path.isfile("test")
+True

@@ -1,59 +1,49 @@
 # coding: utf8
 
-# Copyright 2013-2015 Vincent Jacques <vincent@vincent-jacques.net>
+# Copyright 2013-2017 Vincent Jacques <vincent@vincent-jacques.net>
 
-import threading
-import time
+from __future__ import division, absolute_import, print_function
 
-from ActionTree import Action
-from . import TestCaseWithMocks
-
-
-class ExecuteMock:
-    def __init__(self, mock):
-        self.__mock = mock
-        self.__lock = threading.Lock()
-
-    def __call__(self):
-        with self.__lock:
-            self.__mock.begin()
-        time.sleep(0.1)
-        with self.__lock:
-            self.__mock.end()
+from ActionTree import *
+from . import *
 
 
-class MultiThreadedExecutionTestCase(TestCaseWithMocks):
-    def __create_mocked_action(self, name):
-        mock = self.mocks.create(name)
-        action = Action(ExecuteMock(mock.object), name)
-        return action, mock
-
+class MultiThreadedExecutionTestCase(ActionTreeTestCase):
     def test_many_dependencies(self):
         #     a
         #    /|\
         #   / | \
         #  b  c  d
 
-        a, aMock = self.__create_mocked_action("a")
-        b, bMock = self.__create_mocked_action("b")
-        c, cMock = self.__create_mocked_action("c")
-        d, dMock = self.__create_mocked_action("d")
+        a = self._action("a")
+        b = self._action("b", delay=0.1, end_event=True)
+        c = self._action("c", delay=0.1, end_event=True)
+        d = self._action("d", delay=0.1, end_event=True)
         a.add_dependency(b)
         a.add_dependency(c)
         a.add_dependency(d)
 
-        with self.mocks.unordered:
-            bMock.expect.begin()
-            cMock.expect.begin()
-            dMock.expect.begin()
-        with self.mocks.unordered:
-            bMock.expect.end()
-            cMock.expect.end()
-            dMock.expect.end()
-        aMock.expect.begin()
-        aMock.expect.end()
+        execute(a, cpu_cores=3)
 
-        a.execute(jobs=-1)
+        self.assertEventsEqual("bcd BCD a")
+
+    def test_many_dependencies_with_default_cpu_cores(self):
+        #     a
+        #    /|\
+        #   / | \
+        #  b  c  d
+
+        a = self._action("a")
+        b = self._action("b", delay=0.1, end_event=True)
+        c = self._action("c", delay=0.1, end_event=True)
+        d = self._action("d", delay=0.1, end_event=True)
+        a.add_dependency(b)
+        a.add_dependency(c)
+        a.add_dependency(d)
+
+        execute(a, cpu_cores=None)
+
+        self.assertEventsEqual("bcd BCD a")
 
     def test_deep_dependencies(self):
         #  a
@@ -68,32 +58,21 @@ class MultiThreadedExecutionTestCase(TestCaseWithMocks):
         #  |
         #  f
 
-        a, aMock = self.__create_mocked_action("a")
-        b, bMock = self.__create_mocked_action("b")
-        c, cMock = self.__create_mocked_action("c")
-        d, dMock = self.__create_mocked_action("d")
-        e, eMock = self.__create_mocked_action("e")
-        f, fMock = self.__create_mocked_action("f")
+        a = self._action("a")
+        b = self._action("b", end_event=True)
+        c = self._action("c", end_event=True)
+        d = self._action("d", end_event=True)
+        e = self._action("e", end_event=True)
+        f = self._action("f", end_event=True)
         a.add_dependency(b)
         b.add_dependency(c)
         c.add_dependency(d)
         d.add_dependency(e)
         e.add_dependency(f)
 
-        fMock.expect.begin()
-        fMock.expect.end()
-        eMock.expect.begin()
-        eMock.expect.end()
-        dMock.expect.begin()
-        dMock.expect.end()
-        cMock.expect.begin()
-        cMock.expect.end()
-        bMock.expect.begin()
-        bMock.expect.end()
-        aMock.expect.begin()
-        aMock.expect.end()
+        execute(a, cpu_cores=3)
 
-        a.execute(jobs=3)
+        self.assertEventsEqual("f F e E d D c C b B a")
 
     def test_diamond_dependencies(self):
         #     a
@@ -102,27 +81,18 @@ class MultiThreadedExecutionTestCase(TestCaseWithMocks):
         #    \ /
         #     d
 
-        a, aMock = self.__create_mocked_action("a")
-        b, bMock = self.__create_mocked_action("b")
-        c, cMock = self.__create_mocked_action("c")
-        d, dMock = self.__create_mocked_action("d")
+        a = self._action("a")
+        b = self._action("b", delay=0.1, end_event=True)
+        c = self._action("c", delay=0.1, end_event=True)
+        d = self._action("d", end_event=True)
         a.add_dependency(b)
         a.add_dependency(c)
         b.add_dependency(d)
         c.add_dependency(d)
 
-        dMock.expect.begin()
-        dMock.expect.end()
-        with self.mocks.unordered:
-            bMock.expect.begin()
-            cMock.expect.begin()
-        with self.mocks.unordered:
-            bMock.expect.end()
-            cMock.expect.end()
-        aMock.expect.begin()
-        aMock.expect.end()
+        execute(a, cpu_cores=3)
 
-        a.execute(jobs=3)
+        self.assertEventsEqual("d D bc BC a")
 
     def test_half_diamond_dependency(self):
         #     a
@@ -131,18 +101,34 @@ class MultiThreadedExecutionTestCase(TestCaseWithMocks):
         #    \|
         #     d
 
-        a, aMock = self.__create_mocked_action("a")
-        b, bMock = self.__create_mocked_action("b")
-        d, dMock = self.__create_mocked_action("d")
+        a = self._action("a")
+        b = self._action("b", end_event=True)
+        d = self._action("d", end_event=True)
         a.add_dependency(b)
         a.add_dependency(d)
         b.add_dependency(d)
 
-        dMock.expect.begin()
-        dMock.expect.end()
-        bMock.expect.begin()
-        bMock.expect.end()
-        aMock.expect.begin()
-        aMock.expect.end()
+        execute(a, cpu_cores=3)
 
-        a.execute(jobs=3)
+        self.assertEventsEqual("d D b B a")
+
+    def test_two_deep_branches(self):
+        #     a
+        #    / \
+        #   b   c
+        #   |   |
+        #   d   e
+
+        a = self._action("a")
+        b = self._action("b", delay=0.1, end_event=True)
+        c = self._action("c", delay=0.1, end_event=True)
+        d = self._action("d", delay=0.1, end_event=True)
+        e = self._action("e", delay=0.1, end_event=True)
+        a.add_dependency(b)
+        a.add_dependency(c)
+        b.add_dependency(d)
+        c.add_dependency(e)
+
+        execute(a, cpu_cores=3)
+
+        self.assertEventsEqual("de DEbc BC a")
